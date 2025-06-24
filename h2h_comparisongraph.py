@@ -235,7 +235,7 @@ def ratio(x,y):
 #------MAIN PROGRAM-------------
 
 # what gates rates to run in the experiment
-gate_rates = list( range(2*60,48*60,60) )# list( range(1,2*60,5) )  +list( range(2*60,48*60,60) )
+gate_rates =  list( range(1,5*60,15) )#  +list( range(2*60,48*60,60) )
 
 # list of metrics to be written out
 products_made=[]
@@ -243,7 +243,7 @@ idle_time = []
 replans=[]
 
 # how many tims to rerun a simulation to get a statistically accurate average
-num_samples = 33
+num_samples = 50
 
 # how many results are returned from the final_metrics function
 num_results = 8 
