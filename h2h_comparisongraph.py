@@ -142,7 +142,10 @@ def final_metrics(rlist,env):
     av_idle_time = 0.5*( (n-r1.move_time)/p1 + (n-r2.move_time)/p2)
     move_dist = 0.5*(r1.move_dist + r2.move_dist)
     av_move_dist = 0.5*( r1.move_dist/p1 + r2.move_dist/p2)
+    av_staleness = 0.5*(r1.total_staleness+r2.total_staleness)
     if DEBUG:
+        r1.final_metrics()
+        r2.final_metrics()
         print("*******************************")
         print(f"Method {mname(r1.method)}")
         print(f"Total work time {move_time:.2f} Av work time {av_move_time:.2f}")
@@ -151,19 +154,20 @@ def final_metrics(rlist,env):
         print(f"Total prod {p1+p2}")
         print(f"Total fails {r1.fails+r2.fails}")
         print(f"Total replan {r1.replans+r2.replans}")
+        print(f"Total av staleness {av_staleness}")
         print("*******************************")
         print
     # return all these calculate final metrics
     return move_time, av_move_time, idle_time, \
            av_idle_time, move_dist,av_move_dist,\
-           p1+p2,r1.replans
+           p1+p2,r1.replans,av_staleness
 
 # names for the metrics returned from the final_metrics function
 final_metric_list=["Total work time","Av work time","Total idle time","Av idle time",\
-                   "Total dist","Av dist","Total prod", "Num Replans"]
+                   "Total dist","Av dist","Total prod", "Num Replans","Av Staleness"]
 
-#move_time, av_move_time, idle_time, av_idle_time, move_dist,av_move_dist,p1+p2,replans
-# 0           1             2           3              4          5        6     7
+#move_time, av_move_time, idle_time, av_idle_time, move_dist,av_move_dist,p1+p2,replans,staleness
+# 0           1             2           3              4          5        6     7        8
  
 #
 #
@@ -210,6 +214,8 @@ def do_h2h_experiment():
 
         #now RUN the simulation until SIM_TIME
         env.run(until=SIM_TIME)
+        #for r in ROBOTS:
+        #    r.final_metrics()
 
         # record the results
         res.append( final_metrics(ROBOTS,env))
@@ -235,18 +241,22 @@ def ratio(x,y):
 #------MAIN PROGRAM-------------
 
 # what gates rates to run in the experiment
-gate_rates =  list( range(1,5*60,15) )#  +list( range(2*60,48*60,60) )
+gate_rates =  list( range(1,12*60,15) )#  +list( range(2*60,48*60,60) )
+
+#gate_rates =[ 1 ]
 
 # list of metrics to be written out
 products_made=[]
 idle_time = []
 replans=[]
+staleness=[]
+move_time=[]
 
 # how many tims to rerun a simulation to get a statistically accurate average
 num_samples = 50
 
 # how many results are returned from the final_metrics function
-num_results = 8 
+num_results = 9 
 
 
 # RUN EXPERIMENT
@@ -279,21 +289,29 @@ for gr in gate_rates: # eveluate for each gate rate
     #add the average results to the metrics lists
     products_made.append( ratio(res_mpp[6],res_wavn[6]))
     idle_time.append( ratio(res_mpp[3],res_wavn[3]) )
+    move_time.append( ratio(res_mpp[1],res_wavn[1]) )
     replans.append( res_mpp[7] )
+    staleness.append( res_mpp[8] )
 
 # All experiments completed
 # Write out the results as a CSV file
 # and also use matplot lib to show what the results look like
 with open(expfile,"w") as csvfile:
     csvw = csv.writer(csvfile)
-    csvw.writerow(gate_rates)
-    csvw.writerow(replans)
+    csvw.writerow(["GR"]+gate_rates)
+    csvw.writerow(["RP"]+replans)
     plt.plot(gate_rates,replans)
     plt.show()
-    csvw.writerow(products_made)
+    csvw.writerow(["ST"]+staleness)
+    plt.plot(gate_rates,staleness)
+    plt.show()
+    csvw.writerow(["PM"]+products_made)
     plt.plot(gate_rates, products_made)
     plt.show()
-    csvw.writerow(idle_time)
+    csvw.writerow(["MT"]+move_time)
+    plt.plot(gate_rates,move_time)
+    plt.show()
+    csvw.writerow(["IT"]+idle_time)
     plt.plot(gate_rates,idle_time)
     plt.show()
 #---------------------------------END OF PROGRAM-------------------------

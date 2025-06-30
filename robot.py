@@ -131,6 +131,8 @@ class Robot:
         self.num_nonlocal_products = 0 # total non local products 
         self.fails = 0 # how many 'give up' times, only nonlocal can fail
         self.replans = 0 # how many replanned paths
+        self.total_staleness=0 # average out of date the map was for each update
+        self.total_use=0 # each map usage for planning
         # which run function is run de[ends on setting of method
         self.run = [ self.runMPP, self.runWAVN ] # the two functions
         #
@@ -146,6 +148,7 @@ class Robot:
         print("Total prod (local,nonlocal)",self.num_products,self.num_nonlocal_products)
         print("Total fails ",self.fails)
         print("Total replan ",self.replans)
+        print("Total staleness ",self.total_staleness)
         self.map.display("Map")
         return
 
@@ -161,6 +164,7 @@ class Robot:
         print(f"Total prod (local {self.num_products},nonlocal {self.num_nonlocal_products}),sum {p}")
         print(f"Total fails {self.fails}")
         print(f"Total replan {self.replans}")
+        print(f"Total staleness {self.total_staleness}")
         print("---------------------------------")
           
     # test if the destination is local or nonlocal
@@ -248,6 +252,8 @@ class Robot:
                     # do mapping: update the status of the gates now
                     self.map.gate_status[g]=self.world.gate_status[g]
                     other_robot.map.gate_status[g]=self.world.gate_status[g]
+                    self.map.update_time[g]=self.env.now
+                    other_robot.map.update_time[g]=self.env.now
                 else:
                     st=0 # no mapping update
 
@@ -280,6 +286,8 @@ class Robot:
                     # do the mapping
                     self.map.gate_status[g]=self.world.gate_status[g]
                     other_robot.map.gate_status[g]=self.world.gate_status[g]
+                    self.map.update_time[g]=self.env.now
+                    other_robot.map.update_time[g]=self.env.now
                 else:
                     st=0 # no map update
 
@@ -323,6 +331,9 @@ class Robot:
                     sti=0 # one path attempt sensing time
                     while not path_found and self.retries>0: # nonlocal PP loop
                         g = self.closest_gate(open_gates)
+                        staleness = self.env.now - self.map.update_time[g] # how stale was the map?
+                        self.total_staleness = (self.total_staleness*self.total_use + staleness)/(self.total_use+1)
+                        self.total_use += 1
                         sd,pi = self.mapping_togate(self.location,self.map.gate_enter[g],g)
                         # was that gate open?
                         # either way, do mapping and update gate status
@@ -331,6 +342,8 @@ class Robot:
                         # do the mapping
                         self.map.gate_status[g]=self.world.gate_status[g]
                         other_robot.map.gate_status[g]=self.world.gate_status[g]
+                        self.map.update_time[g]=self.env.now
+                        other_robot.map.update_time[g]=self.env.now
                         # map updated
                         path_found = self.map.gate_status[g]
                         # if the gate was open, then the path is good
@@ -348,14 +361,17 @@ class Robot:
                         else: # this gate was closed, so set the location to be here and try again
                             if g in open_gates: # if map said it was open
                                 open_gates.remove(g) # don't consider it
+                            
                             # make the robot location be the spot where it
                             #could see the status of the gate for mapping
                             self.location = pi # closest approach to this gate
                             if DEBUG:
                                 print("gate was closed current d=",d," additiona sd=",sd)
                             d += sd # distance travelled to that closest point
-                            st += sti # accumulate already yielded
+                            st += sti # accumulate already yielded3
+                            #self.total_staleness = float(self.total_staleness * self.total_updates + staleness) # expand sum
                             self.replans += 1 # recard replan was needed
+                            #self.total_staleness /= self.replans # restore average
                         if len(open_gates)==0 and not path_found:
                             # need to explore and see if any gates have opened
                             if self.retries>0: # yes we can explore for now
@@ -390,6 +406,8 @@ class Robot:
                         #do the mapping
                         self.map.gate_status[g]=self.world.gate_status[g]
                         other_robot.map.gate_status[g]=self.world.gate_status[g]
+                        self.map.update_time[g]=self.env.now
+                        other_robot.map.update_time[g]=self.env.now
                         # mapping done
                     else:
                         st=0 # no mapping
@@ -512,14 +530,20 @@ class Robot:
                         open_gates = self.check_map(self.world)
                         yield self.env.timeout(ROBOT_LANDMARK_TIME) # time to do this
                         lm_t += ROBOT_LANDMARK_TIME
-                    if len(open_gates)!=0: # path found
-                        # WAVN can't pick nearest - pick random gate to go through
-                        landmark = random.choice(open_gates)
-                        self.last_gate = landmark # same return assumption as MPP
-                        d,t = self.gate_path(landmark)
-                        d += ROBOT_VH_DISTANCE              # VH penalty
-                        t += ROBOT_VH_DISTANCE/ROBOT_SPEED
-                        self.state = STATE_2OUTFLOW
+                    if len(open_gates)!=0: # check each for visibility
+                        for landmark in np.random.permutation(open_gates):
+                            # WAVN can't pick nearest - pick random gate to go through
+                            p1 = self.location
+                            p2 = other_robot.location
+                            p3 = self.map.gate_location[landmark]
+                            if cart_distance(p1,p3)<=CAMERA_RANGE and \
+                               cart_distance(p2,p3)<=CAMERA_RANGE:
+                                # Path found
+                                self.last_gate = landmark # same return assumption as MPP
+                                d,t = self.gate_path(landmark)
+                                d += ROBOT_VH_DISTANCE              # VH penalty
+                                t += ROBOT_VH_DISTANCE/ROBOT_SPEED
+                                self.state = STATE_2OUTFLOW
                     else: # no path found despite retries
                         self.fails += 1
                         self.retries = ROBOT_FAIL_RETRIES # reset 

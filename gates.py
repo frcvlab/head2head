@@ -51,6 +51,7 @@ class Gates:
         self.gate_exit  = [ addc( GATE1_LOC, GATE_EXIT ),
                        addc( GATE2_LOC, GATE_EXIT ),
                        addc( GATE3_LOC, GATE_EXIT ) ]
+        self.update_time = [0.0]*NUM_GATES # when was this gate last updated
         return
     # mark a gate as open
     def open(self,g):
